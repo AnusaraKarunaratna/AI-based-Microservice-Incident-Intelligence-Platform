@@ -17,7 +17,7 @@ public class RabbitMqService
         using var channel = connection.CreateModel();
 
         channel.QueueDeclare(
-            queue: "log_queue",
+            queue: "logs_queue",
             durable: false,
             exclusive: false,
             autoDelete: false,
@@ -28,7 +28,7 @@ public class RabbitMqService
 
         channel.BasicPublish(
             exchange: "",
-            routingKey: "log_queue",
+            routingKey: "logs_queue",
             basicProperties: null,
             body: body);
     }

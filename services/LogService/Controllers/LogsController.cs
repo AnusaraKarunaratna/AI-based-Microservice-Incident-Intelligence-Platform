@@ -10,7 +10,7 @@ namespace LogService.Controllers;
 public class LogsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    private readonly RabbitMqService _rabbitMqService;
+    private readonly RabbitMqService _rabbitMqService;    // Dependency Injection (DI) - RabbitMQ object and database object
 
     public LogsController(
         ApplicationDbContext context,
