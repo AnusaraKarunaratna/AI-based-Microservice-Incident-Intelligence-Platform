@@ -1,52 +1,66 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using IncidentService.Models;
 
 namespace IncidentService.Services;
 
 public class IncidentDetectionService
 {
-    // Store error counts per service
     private static readonly ConcurrentDictionary<string, int> ErrorTracker = new();
 
-    // Threshold
     private const int ERROR_THRESHOLD = 5;
+
+    public List<Incident> Incidents { get; } = new();
 
     public Incident? AnalyzeLog(string logMessage)
     {
-        // Simple detection logic
-        if (!logMessage.ToUpper().Contains("ERROR"))
+        LogEntryDto? log;
+
+        try
+        {
+            log = JsonSerializer.Deserialize<LogEntryDto>(logMessage);
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (log == null)
             return null;
 
-        // Extract service name manually
-        string serviceName = "unknown-service";
+        string message = log.Message.ToUpper();
 
-        if (logMessage.Contains("payment-service"))
-            serviceName = "payment-service";
+        if (!message.Contains("ERROR") &&
+            !message.Contains("TIMEOUT") &&
+            !message.Contains("FAIL"))
+        {
+            return null;
+        }
 
-        if (logMessage.Contains("auth-service"))
-            serviceName = "auth-service";
+        string serviceName = log.ServiceName ?? "unknown-service";
 
-        // Increment count
         ErrorTracker.AddOrUpdate(
             serviceName,
             1,
             (key, current) => current + 1);
 
-        int currentCount = ErrorTracker[serviceName];
+        int count = ErrorTracker[serviceName];
 
-        Console.WriteLine(
-            $"{serviceName} error count: {currentCount}");
-
-        // Detect incident
-        if (currentCount >= ERROR_THRESHOLD)
+        if (count >= ERROR_THRESHOLD)
         {
-            return new Incident
+            var incident = new Incident
             {
                 ServiceName = serviceName,
-                ErrorCount = currentCount,
+                ErrorCount = count,
                 Severity = "HIGH",
                 Message = $"{serviceName} exceeded error threshold"
             };
+
+            Incidents.Add(incident);
+
+            Console.WriteLine("INCIDENT CREATED");
+
+            return incident;
         }
 
         return null;
