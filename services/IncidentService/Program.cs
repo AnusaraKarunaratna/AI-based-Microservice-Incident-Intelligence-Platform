@@ -6,6 +6,10 @@ builder.Services.AddHostedService<RabbitMqConsumer>();
 
 builder.Services.AddSingleton<IncidentDetectionService>();
 
+builder.Services.AddHttpClient<AIAnalysisClient>();
+
+builder.Services.AddSingleton<IncidentDetectionService>();
+
 var app = builder.Build();
 
 app.MapGet("/", () => "Incident Service Running");

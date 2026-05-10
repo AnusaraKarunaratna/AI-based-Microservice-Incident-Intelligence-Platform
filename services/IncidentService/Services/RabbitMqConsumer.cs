@@ -7,11 +7,12 @@ namespace IncidentService.Services;
 public class RabbitMqConsumer : BackgroundService
 {
     private readonly IncidentDetectionService _incidentDetectionService;
+    private readonly AIAnalysisClient _aiClient;
 
-    public RabbitMqConsumer(
-        IncidentDetectionService incidentDetectionService)
+    public RabbitMqConsumer(IncidentDetectionService incidentDetectionService, AIAnalysisClient aiClient)
     {
         _incidentDetectionService = incidentDetectionService;
+        _aiClient = aiClient;
     }
 
     protected override Task ExecuteAsync(
@@ -35,7 +36,7 @@ public class RabbitMqConsumer : BackgroundService
 
         var consumer = new EventingBasicConsumer(channel);
 
-        consumer.Received += (model, ea) =>
+        consumer.Received += async (model, ea) =>
         {
             var body = ea.Body.ToArray();
 
@@ -55,16 +56,15 @@ public class RabbitMqConsumer : BackgroundService
 
                 Console.WriteLine("INCIDENT DETECTED");
 
-                Console.WriteLine(
-                    $"Service: {incident.ServiceName}");
+                Console.WriteLine($"Service: {incident.ServiceName}");
 
-                Console.WriteLine(
-                    $"Severity: {incident.Severity}");
+                Console.WriteLine($"Severity: {incident.Severity}");
 
-                Console.WriteLine(
-                    $"Message: {incident.Message}");
+                Console.WriteLine($"Message: {incident.Message}");
 
                 Console.WriteLine("====================\n");
+
+                await _aiClient.AnalyzeIncidentAsync(incident);
             }
         };
 
