@@ -20,7 +20,13 @@ function App() {
     try {
       const res = await fetch("http://localhost:5000/api/logs");
 
-      const data = await res.json();
+      if (!res.ok) {
+        console.log("Logs API failed:", res.status);
+        return;
+      }
+
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
 
       setLogs(data);
     } catch (err) {
@@ -32,11 +38,17 @@ function App() {
     try {
       const res = await fetch("http://localhost:5000/api/incidents");
 
-      const data = await res.json();
+      if (!res.ok) {
+        console.log("Incidents API failed:", res.status);
+        return;
+      }
+
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
 
       setIncidents(data);
     } catch (err) {
-      console.log(err);
+      console.log("fetchIncidents error:", err);
     }
   };
 

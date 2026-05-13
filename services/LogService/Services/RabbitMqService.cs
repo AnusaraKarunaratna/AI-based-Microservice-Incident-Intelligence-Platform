@@ -15,28 +15,52 @@ public class RabbitMqService
 
     public void PublishMessage(object message)
     {
-        var factory = new ConnectionFactory
+        const int maxRetries = 5;
+        int retries = 0;
+
+        while (true)
         {
-            HostName = _configuration["RabbitMQ:Host"]
-        };
+            try
+            {
+                var factory = new ConnectionFactory
+                {
+                    HostName = _configuration["RabbitMQ:Host"],
+                    RequestedHeartbeat = TimeSpan.FromSeconds(60)
+                };
 
-        using var connection = factory.CreateConnection();
+                using var connection = factory.CreateConnection();
+                using var channel = connection.CreateModel();
 
-        using var channel = connection.CreateModel();
+                channel.QueueDeclare(
+                    queue: "logs_queue",
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false);
 
-        channel.QueueDeclare(
-            queue: "logs_queue",
-            durable: true,
-            exclusive: false,
-            autoDelete: false);
+                var json = JsonSerializer.Serialize(message);
+                var body = Encoding.UTF8.GetBytes(json);
 
-        var json = JsonSerializer.Serialize(message);
+                channel.BasicPublish(
+                    exchange: "",
+                    routingKey: "logs_queue",
+                    body: body);
 
-        var body = Encoding.UTF8.GetBytes(json);
+                Console.WriteLine($"Published message to logs_queue: {json}");
+                return;
+            }
+            catch (Exception ex)
+            {
+                retries++;
+                Console.WriteLine($"RabbitMQ publish failed (attempt {retries}/{maxRetries}): {ex.Message}");
 
-        channel.BasicPublish(
-            exchange: "",
-            routingKey: "logs_queue",
-            body: body);
+                if (retries >= maxRetries)
+                {
+                    Console.WriteLine("Max publish retries reached. Message dropped.");
+                    return;
+                }
+
+                Thread.Sleep(2000);
+            }
+        }
     }
 }

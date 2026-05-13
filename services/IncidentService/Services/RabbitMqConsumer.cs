@@ -22,14 +22,53 @@ public class RabbitMqConsumer : BackgroundService
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var factory = new ConnectionFactory
+        // Run in background thread so it doesn't block app startup
+        Task.Run(() => StartConsuming(stoppingToken), stoppingToken);
+        return Task.CompletedTask;
+    }
+
+    private void StartConsuming(CancellationToken stoppingToken)
+    {
+        IConnection? connection = null;
+        IModel? channel = null;
+
+        // Retry loop for RabbitMQ connection
+        const int maxRetries = 10;
+        int retries = 0;
+
+        while (connection == null || !connection.IsOpen)
         {
-            HostName = _configuration["RabbitMQ:Host"]
-        };
+            try
+            {
+                Console.WriteLine($"Attempting RabbitMQ connection (attempt {retries + 1}/{maxRetries})...");
 
-        var connection = factory.CreateConnection();
+                var factory = new ConnectionFactory
+                {
+                    HostName = _configuration["RabbitMQ:Host"],
+                    RequestedHeartbeat = TimeSpan.FromSeconds(60),
+                    AutomaticRecoveryEnabled = true
+                };
 
-        var channel = connection.CreateModel();
+                connection = factory.CreateConnection();
+                Console.WriteLine("RabbitMQ connected successfully.");
+            }
+            catch (Exception ex)
+            {
+                retries++;
+                Console.WriteLine($"RabbitMQ connection failed: {ex.Message}");
+
+                if (retries >= maxRetries)
+                {
+                    Console.WriteLine("Max RabbitMQ retries reached. Consumer will not start.");
+                    return;
+                }
+
+                Console.WriteLine("Retrying in 5 seconds...");
+                Thread.Sleep(5000);
+            }
+        }
+
+        channel = connection.CreateModel();
 
         channel.QueueDeclare(
             queue: "logs_queue",
@@ -39,21 +78,30 @@ public class RabbitMqConsumer : BackgroundService
 
         var consumer = new EventingBasicConsumer(channel);
 
-        consumer.Received += async (_, ea) =>
+        consumer.Received += (_, ea) =>
         {
             var body = ea.Body.ToArray();
-
             var message = Encoding.UTF8.GetString(body);
 
-            Console.WriteLine($"Received: {message}");
+            Console.WriteLine($"Received message: {message}");
 
-            var incident =
-                _incidentDetectionService.AnalyzeLog(message);
+            var incident = _incidentDetectionService.AnalyzeLog(message);
 
             if (incident != null)
             {
-                await _aiClient.AnalyzeIncidentAsync(incident);
-                Console.WriteLine("AI recommendation added.");
+                // Use Task.Run to avoid async void and properly catch exceptions
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _aiClient.AnalyzeIncidentAsync(incident);
+                        Console.WriteLine("AI recommendation added successfully.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"AI analysis failed: {ex.Message}");
+                    }
+                });
             }
         };
 
@@ -62,6 +110,16 @@ public class RabbitMqConsumer : BackgroundService
             autoAck: true,
             consumer: consumer);
 
-        return Task.CompletedTask;
+        Console.WriteLine("RabbitMQ consumer started. Listening on logs_queue...");
+
+        // Keep the consumer alive until cancellation is requested
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            Thread.Sleep(1000);
+        }
+
+        channel?.Close();
+        connection?.Close();
+        Console.WriteLine("RabbitMQ consumer stopped.");
     }
 }

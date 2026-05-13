@@ -32,7 +32,8 @@ public class RedisCacheService
             if (string.IsNullOrEmpty(json))
                 continue;
 
-            var obj = JsonSerializer.Deserialize<Incident>(json);
+            var obj = JsonSerializer.Deserialize<Incident>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             if (obj != null)
                 result.Add(obj);
