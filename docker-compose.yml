@@ -10,6 +10,8 @@ services:
       POSTGRES_DB: incidentdb
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -20,7 +22,95 @@ services:
       - "15672:15672"
 
   redis:
-    image: redis:latest
+    image: redis:7
     container_name: redis-cache
+    restart: always
     ports:
       - "6379:6379"
+
+  logservice:
+    build:
+      context: ./services/LogService
+    container_name: logservice
+    restart: always
+    ports:
+      - "5108:8080"
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=incidentdb;Username=admin;Password=admin123
+      RabbitMQ__Host: rabbitmq
+
+  incidentservice:
+    build:
+      context: ./services/IncidentService
+    container_name: incidentservice
+    restart: always
+    ports:
+      - "5018:8080"
+    depends_on:
+      - rabbitmq
+      - redis
+      - aianalysisservice
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      RabbitMQ__Host: rabbitmq
+      Redis__Connection: redis:6379
+      AIService__Url: http://aianalysisservice:8080
+
+  aianalysisservice:
+    build:
+      context: ./services/AIAnalysisService
+    container_name: aianalysisservice
+    restart: always
+    ports:
+      - "5247:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+
+  apigateway:
+    build:
+      context: ./services/ApiGateway
+    container_name: apigateway
+    restart: always
+    ports:
+      - "5000:8080"
+    depends_on:
+      - logservice
+      - incidentservice
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+
+    
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+  aiinferenceservice:
+    build:
+      context: ./services/AIInferenceService
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - apigateway
+
+volumes:
+  postgres_data:
+  ollama:
+

@@ -1,29 +1,41 @@
 using IncidentService.Services;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend",
-        policy =>
-        {
-            policy
-                .AllowAnyOrigin()
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        });
-});
+builder.Services.AddEndpointsApiExplorer();
+
+builder.Services.AddSwaggerGen();
+
+builder.Services.AddSingleton<IncidentDetectionService>();
 
 builder.Services.AddHostedService<RabbitMqConsumer>();
-builder.Services.AddSingleton<IncidentDetectionService>();
+
 builder.Services.AddHttpClient<AIAnalysisClient>();
 
-var app = builder.Build();
-app.UseCors("AllowFrontend");   // MUST be FIRST
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect(
+        builder.Configuration["Redis:Connection"]!));
 
-app.UseHttpsRedirection();
+builder.Services.AddSingleton<RedisCacheService>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
+
+var app = builder.Build();
+
+app.UseSwagger();
+
+app.UseSwaggerUI();
+
+app.UseCors("AllowAll");
 
 app.MapControllers();
 

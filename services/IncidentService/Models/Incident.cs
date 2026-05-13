@@ -11,4 +11,11 @@ public class Incident
     public DateTime DetectedAt { get; set; } = DateTime.UtcNow;
 
     public string Message { get; set; } = string.Empty;
+
+    // AI Analysis
+    public string RootCause { get; set; } = string.Empty;
+
+    public string Recommendation { get; set; } = string.Empty;
+
+    public string Priority { get; set; } = string.Empty;
 }

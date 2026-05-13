@@ -8,19 +8,23 @@ public class RabbitMqConsumer : BackgroundService
 {
     private readonly IncidentDetectionService _incidentDetectionService;
     private readonly AIAnalysisClient _aiClient;
+    private readonly IConfiguration _configuration;
 
-    public RabbitMqConsumer(IncidentDetectionService incidentDetectionService, AIAnalysisClient aiClient)
+    public RabbitMqConsumer(
+        IncidentDetectionService incidentDetectionService,
+        AIAnalysisClient aiClient,
+        IConfiguration configuration)
     {
         _incidentDetectionService = incidentDetectionService;
         _aiClient = aiClient;
+        _configuration = configuration;
     }
 
-    protected override Task ExecuteAsync(
-        CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var factory = new ConnectionFactory()
+        var factory = new ConnectionFactory
         {
-            HostName = "localhost"
+            HostName = _configuration["RabbitMQ:Host"]
         };
 
         var connection = factory.CreateConnection();
@@ -29,42 +33,27 @@ public class RabbitMqConsumer : BackgroundService
 
         channel.QueueDeclare(
             queue: "logs_queue",
-            durable: false,
+            durable: true,
             exclusive: false,
-            autoDelete: false,
-            arguments: null);
+            autoDelete: false);
 
         var consumer = new EventingBasicConsumer(channel);
 
-        consumer.Received += async (model, ea) =>
+        consumer.Received += async (_, ea) =>
         {
             var body = ea.Body.ToArray();
 
             var message = Encoding.UTF8.GetString(body);
 
-            Console.WriteLine("\nReceived Log:");
-            Console.WriteLine(message);
+            Console.WriteLine($"Received: {message}");
 
-            // Analyze log
             var incident =
                 _incidentDetectionService.AnalyzeLog(message);
 
-            // Incident detected
             if (incident != null)
             {
-                Console.WriteLine("\n====================");
-
-                Console.WriteLine("INCIDENT DETECTED");
-
-                Console.WriteLine($"Service: {incident.ServiceName}");
-
-                Console.WriteLine($"Severity: {incident.Severity}");
-
-                Console.WriteLine($"Message: {incident.Message}");
-
-                Console.WriteLine("====================\n");
-
                 await _aiClient.AnalyzeIncidentAsync(incident);
+                Console.WriteLine("AI recommendation added.");
             }
         };
 
