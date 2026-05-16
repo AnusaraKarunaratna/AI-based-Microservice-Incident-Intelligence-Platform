@@ -21,15 +21,15 @@ Frontend (React)
 API Gateway (YARP)
 ↓
 Microservices (.NET 8)
-├── LogService
-├── IncidentService
-└── AIInferenceService (FastAPI + LLM)
+1. LogService
+2. IncidentService
+3. AIInferenceService (FastAPI + LLM)
 
 Infrastructure
-├── RabbitMQ
-├── PostgreSQL
-├── Redis
-└── Docker
+1. RabbitMQ
+2. PostgreSQL
+3. Redis
+4. Docker
 
 ## Technologies
 
@@ -40,8 +40,7 @@ Infrastructure
 - Docker
 - FastAPI
 - React
-- Ollama
-- Mistral / Llama3
+- Gemini
 - YARP API Gateway
 
 ## Run Project
