@@ -7,16 +7,20 @@ namespace IncidentService.Controllers;
 [Route("api/incidents")]
 public class IncidentController : ControllerBase
 {
-    private readonly IncidentDetectionService _service;
+    private readonly RedisCacheService _redis;
 
-    public IncidentController(IncidentDetectionService service)
+    public IncidentController(
+        RedisCacheService redis)
     {
-        _service = service;
+        _redis = redis;
     }
 
     [HttpGet]
-    public IActionResult GetAll()
+    public async Task<IActionResult> GetAll()
     {
-        return Ok(_service.Incidents);
+        var incidents =
+            await _redis.GetIncidentsAsync();
+
+        return Ok(incidents);
     }
 }

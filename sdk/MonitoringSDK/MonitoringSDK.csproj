@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- 🔥 NUGET IDENTITY -->
+    <PackageId>MonitoringSDK</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Anusara</Authors>
+    <Company>Incident Intelligence Platform</Company>
+    <Description>Enterprise-grade monitoring and incident tracking SDK</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- IMPORTANT -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

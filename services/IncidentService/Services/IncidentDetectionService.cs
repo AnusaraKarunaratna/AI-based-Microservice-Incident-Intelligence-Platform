@@ -16,6 +16,13 @@ public class IncidentDetectionService
 
     public List<Incident> Incidents { get; } = new();
 
+    private readonly RedisCacheService _redis;
+
+    public IncidentDetectionService(RedisCacheService redis)
+    {
+        _redis = redis;
+    }
+
     public Incident? AnalyzeLog(string logMessage)
     {
         LogEntryDto? log;
@@ -41,12 +48,12 @@ public class IncidentDetectionService
         Console.WriteLine($"[IncidentDetection] Processing — Service: {log.ServiceName}, Level: {log.Level}, Message: {log.Message}");
 
         string message = (log.Message ?? "").ToUpper();
-        string level   = (log.Level   ?? "").ToUpper();
+        string level = (log.Level ?? "").ToUpper();
 
-        bool isError = message.Contains("ERROR")   ||
-                       message.Contains("TIMEOUT")  ||
-                       message.Contains("FAIL")     ||
-                       level == "ERROR"              ||
+        bool isError = message.Contains("ERROR") ||
+                       message.Contains("TIMEOUT") ||
+                       message.Contains("FAIL") ||
+                       level == "ERROR" ||
                        level == "CRITICAL";
 
         if (!isError)
@@ -83,9 +90,9 @@ public class IncidentDetectionService
             var incident = new Incident
             {
                 ServiceName = serviceName,
-                ErrorCount  = count,
-                Severity    = "HIGH",
-                Message     = $"{serviceName} exceeded error threshold with {count} errors detected"
+                ErrorCount = count,
+                Severity = "HIGH",
+                Message = $"{serviceName} exceeded error threshold with {count} errors detected"
             };
 
             Incidents.Add(incident);
@@ -101,12 +108,11 @@ public class IncidentDetectionService
     /// <summary>
     /// Resolves an active incident for a service, allowing it to re-trigger if errors continue.
     /// </summary>
-    public void ResolveIncident(string serviceName)
+    public async Task ResolveIncident(string serviceName)
     {
         ActiveIncidents[serviceName] = false;
         ErrorTracker[serviceName] = 0;
-        var existing = Incidents.FirstOrDefault(i => i.ServiceName == serviceName);
-        if (existing != null) Incidents.Remove(existing);
-        Console.WriteLine($"[IncidentDetection] Incident resolved for {serviceName}.");
+        await _redis.RemoveIncidentAsync(serviceName);
+        Console.WriteLine($"Incident resolved for {serviceName}");
     }
 }

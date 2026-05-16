@@ -4,14 +4,18 @@ services:
     image: postgres:16
     container_name: postgres-db
     restart: always
+
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: incidentdb
+
     ports:
       - "5432:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d incidentdb"]
       interval: 5s
@@ -22,9 +26,11 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     restart: always
+
     ports:
       - "5672:5672"
       - "15672:15672"
+
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -35,8 +41,10 @@ services:
     image: redis:7
     container_name: redis-cache
     restart: always
+
     ports:
       - "6379:6379"
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -46,15 +54,19 @@ services:
   logservice:
     build:
       context: ./services/LogService
+
     container_name: logservice
     restart: always
+
     ports:
       - "5108:8080"
+
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+
     environment:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=incidentdb;Username=admin;Password=admin123
@@ -63,65 +75,122 @@ services:
   incidentservice:
     build:
       context: ./services/IncidentService
+
     container_name: incidentservice
     restart: always
+
     ports:
       - "5018:8080"
+
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
         condition: service_healthy
-      aianalysisservice:
+      # FIX: Depend on aiinferenceservice (the actual Python AI service), not a non-existent aianalysisservice
+      aiinferenceservice:
         condition: service_started
+
     environment:
       ASPNETCORE_URLS: http://+:8080
       RabbitMQ__Host: rabbitmq
       Redis__Connection: redis:6379
-      AIService__Url: http://aianalysisservice:8080
+      # FIX: Point to aiinferenceservice which is the real Python inference service
+      AIService__Url: http://aiinferenceservice:8080
 
-  aianalysisservice:
+  # FIX: Removed the broken separate "aianalysisservice" container.
+  # AIInferenceService IS the AI analysis service. It now exposes /api/analysis on port 8080.
+  aiinferenceservice:
     build:
-      context: ./services/AIAnalysisService
-    container_name: aianalysisservice
+      context: ./services/AIInferenceService
+
+    container_name: aiinferenceservice
     restart: always
+
     ports:
-      - "5247:8080"
+      - "8000:8080"
+
     environment:
-      ASPNETCORE_URLS: http://+:8080
+      # FIX: Removed ASPNETCORE_URLS — this is a Python/uvicorn service, not ASP.NET
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
 
   apigateway:
     build:
       context: ./services/ApiGateway
+
     container_name: apigateway
     restart: always
+
     ports:
       - "5000:8080"
+
     depends_on:
       - logservice
       - incidentservice
+
     environment:
       ASPNETCORE_URLS: http://+:8080
-
-  aiinferenceservice:
-    build:
-      context: ./services/AIInferenceService
-    container_name: aiinferenceservice
-    restart: always
-    ports:
-      - "8000:8000"
-    environment:
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
 
   frontend:
     build:
       context: ./frontend
+
     container_name: frontend
     restart: always
+
     ports:
       - "3000:3000"
+
     depends_on:
       - apigateway
 
+  prometheus:
+    image: prom/prometheus
+
+    container_name: prometheus
+    restart: always
+
+    ports:
+      - "9090:9090"
+
+    # FIX: Mount the prometheus config so it actually scrapes the services
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+
+    depends_on:
+      - apigateway
+      - logservice
+      - incidentservice
+
+  grafana:
+    image: grafana/grafana
+
+    container_name: grafana
+    restart: always
+
+    ports:
+      - "3001:3000"
+
+    # FIX: Mount provisioning config so Prometheus datasource and dashboards
+    # are automatically available without manual setup
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+
+    depends_on:
+      - prometheus
+
 volumes:
   postgres_data:
+  grafana_data:

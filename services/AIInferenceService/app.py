@@ -4,6 +4,7 @@ import requests
 import os
 import json
 from dotenv import load_dotenv
+import uvicorn
 
 load_dotenv()
 
@@ -51,7 +52,7 @@ ANALYSIS REQUIREMENTS:
 
 2. TECHNICAL EXPLANATION
 - Explain WHY this likely happened
-- Mention failure chain (e.g. retry storm → connection pool exhaustion)
+- Mention failure chain (e.g. retry storm -> connection pool exhaustion)
 
 3. IMPACT ANALYSIS
 - What breaks in system if unresolved
@@ -62,9 +63,9 @@ ANALYSIS REQUIREMENTS:
 - Configuration/code-level suggestions
 
 5. PRIORITY RULES:
-- HIGH → service outage or data loss risk
-- MEDIUM → degraded performance or intermittent failure
-- LOW → non-critical or recoverable issue
+- HIGH -> service outage or data loss risk
+- MEDIUM -> degraded performance or intermittent failure
+- LOW -> non-critical or recoverable issue
 
 ---
 
@@ -81,7 +82,8 @@ OUTPUT FORMAT (STRICT JSON ONLY):
 """
 
 
-@app.post("/analyze")
+# FIX: Route is /api/analysis to match what AIAnalysisClient in IncidentService calls
+@app.post("/api/analysis")
 def analyze(incident: IncidentRequest):
 
     prompt = build_prompt(incident)
@@ -109,7 +111,7 @@ def analyze(incident: IncidentRequest):
     }
 
     try:
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=20)
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         result = response.json()
 
@@ -118,7 +120,6 @@ def analyze(incident: IncidentRequest):
 
         parsed = json.loads(text)
 
-        # Ensure confidence exists
         if "confidence" not in parsed:
             parsed["confidence"] = 0.75
 
@@ -133,3 +134,8 @@ def analyze(incident: IncidentRequest):
             "priority": "MEDIUM",
             "confidence": 0.0
         }
+
+
+# FIX: Bind to 0.0.0.0:8080 to match Docker container port mapping
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8080)

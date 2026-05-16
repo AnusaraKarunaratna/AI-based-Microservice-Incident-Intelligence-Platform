@@ -1,5 +1,6 @@
 using IncidentService.Services;
 using StackExchange.Redis;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +28,14 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
         try
         {
             Console.WriteLine($"Connecting to Redis at {connStr}...");
-            var connection = ConnectionMultiplexer.Connect(connStr);
+
+            // FIX: Add abortConnect=false so the client doesn't throw on first failed attempt
+            var configOptions = ConfigurationOptions.Parse(connStr);
+            configOptions.AbortOnConnectFail = false;
+            configOptions.ConnectRetry = 3;
+            configOptions.ConnectTimeout = 5000;
+
+            var connection = ConnectionMultiplexer.Connect(configOptions);
             Console.WriteLine("Redis connected successfully.");
             return connection;
         }
@@ -48,7 +56,13 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     }
 });
 
-builder.Services.AddSingleton<RedisCacheService>();
+// FIX: Pass IConfiguration to RedisCacheService so it can read the Redis endpoint
+builder.Services.AddSingleton<RedisCacheService>(sp =>
+{
+    var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new RedisCacheService(redis, config);
+});
 
 builder.Services.AddCors(options =>
 {
@@ -65,6 +79,11 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseCors("AllowAll");
+
+// Prometheus metrics middleware
+app.UseHttpMetrics();
+
+app.MapMetrics();
 
 app.MapControllers();
 

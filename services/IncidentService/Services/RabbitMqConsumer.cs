@@ -9,15 +9,18 @@ public class RabbitMqConsumer : BackgroundService
     private readonly IncidentDetectionService _incidentDetectionService;
     private readonly AIAnalysisClient _aiClient;
     private readonly IConfiguration _configuration;
+    private readonly RedisCacheService _redis;
 
     public RabbitMqConsumer(
-        IncidentDetectionService incidentDetectionService,
-        AIAnalysisClient aiClient,
-        IConfiguration configuration)
+    IncidentDetectionService incidentDetectionService,
+    AIAnalysisClient aiClient,
+    IConfiguration configuration,
+    RedisCacheService redis)
     {
         _incidentDetectionService = incidentDetectionService;
         _aiClient = aiClient;
         _configuration = configuration;
+        _redis = redis;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -95,7 +98,8 @@ public class RabbitMqConsumer : BackgroundService
                     try
                     {
                         await _aiClient.AnalyzeIncidentAsync(incident);
-                        Console.WriteLine("AI recommendation added successfully.");
+                        await _redis.SaveIncidentAsync(incident);
+                        Console.WriteLine("Incident saved to Redis.");
                     }
                     catch (Exception ex)
                     {
